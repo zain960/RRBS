@@ -1,0 +1,538 @@
+// Restaurant & Room Booking System — data model
+// Mirrors SRS §7.2 table definitions. See CLAUDE.md §3/§5 for conventions.
+//
+// Conventions:
+//   - Models PascalCase, tables snake_case plural (@@map), columns snake_case (@map)
+//   - Money  -> Decimal(10,2)
+//   - Times  -> timestamptz, always stored UTC
+//   - Enum values @map to the exact strings used in the SRS
+//
+// Prisma 7: the connection URL lives in prisma.config.js, not here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE   @map("Active")
+  INACTIVE @map("Inactive")
+
+  @@map("user_status")
+}
+
+enum RoomStatus {
+  AVAILABLE   @map("Available")
+  OCCUPIED    @map("Occupied")
+  RESERVED    @map("Reserved")
+  MAINTENANCE @map("Maintenance")
+
+  @@map("room_status")
+}
+
+enum BookingStatus {
+  PENDING     @map("Pending")
+  CONFIRMED   @map("Confirmed")
+  CHECKED_IN  @map("Checked-in")
+  CHECKED_OUT @map("Checked-out")
+  CANCELLED   @map("Cancelled")
+  NO_SHOW     @map("No-show")
+
+  @@map("booking_status")
+}
+
+enum TableStatus {
+  FREE     @map("Free")
+  OCCUPIED @map("Occupied")
+  RESERVED @map("Reserved")
+
+  @@map("table_status")
+}
+
+enum TableLocation {
+  INDOOR  @map("Indoor")
+  OUTDOOR @map("Outdoor")
+
+  @@map("table_location")
+}
+
+enum FoodAvailability {
+  AVAILABLE   @map("Available")
+  UNAVAILABLE @map("Unavailable")
+
+  @@map("food_availability")
+}
+
+enum OrderType {
+  DINE_IN      @map("Dine-in")
+  TAKEAWAY     @map("Takeaway")
+  DELIVERY     @map("Delivery")
+  ROOM_SERVICE @map("Room Service")
+
+  @@map("order_type")
+}
+
+enum OrderStatus {
+  PLACED         @map("Placed")
+  PREPARING      @map("Preparing")
+  READY          @map("Ready")
+  SERVED         @map("Served")
+  PICKED_UP      @map("Picked Up")
+  DISPATCHED     @map("Dispatched")
+  DELIVERED      @map("Delivered")
+  BILLED_TO_ROOM @map("Billed to Room")
+  CANCELLED      @map("Cancelled")
+
+  @@map("order_status")
+}
+
+enum PaymentMethod {
+  CASH   @map("Cash")
+  CARD   @map("Card")
+  ONLINE @map("Online")
+
+  @@map("payment_method")
+}
+
+enum PaymentType {
+  FULL    @map("Full")
+  ADVANCE @map("Advance")
+  BALANCE @map("Balance")
+  REFUND  @map("Refund")
+
+  @@map("payment_type")
+}
+
+enum PaymentStatus {
+  PENDING   @map("Pending")
+  COMPLETED @map("Completed")
+  FAILED    @map("Failed")
+  REFUNDED  @map("Refunded")
+
+  @@map("payment_status")
+}
+
+enum DiscountType {
+  PERCENTAGE   @map("Percentage")
+  FIXED_AMOUNT @map("Fixed Amount")
+
+  @@map("discount_type")
+}
+
+enum CouponApplicability {
+  ROOMS @map("Rooms")
+  FOOD  @map("Food")
+  BOTH  @map("Both")
+
+  @@map("coupon_applicability")
+}
+
+enum RecipientType {
+  CUSTOMER @map("Customer")
+  STAFF    @map("Staff")
+
+  @@map("recipient_type")
+}
+
+enum NotificationChannel {
+  SMS   @map("SMS")
+  EMAIL @map("Email")
+  PUSH  @map("Push")
+
+  @@map("notification_channel")
+}
+
+enum NotificationStatus {
+  SENT    @map("Sent")
+  FAILED  @map("Failed")
+  PENDING @map("Pending")
+
+  @@map("notification_status")
+}
+
+// ---------------------------------------------------------------------------
+// Access control (SRS §3, §7.2)
+// ---------------------------------------------------------------------------
+
+model Role {
+  roleId      Int      @id @default(autoincrement()) @map("role_id")
+  roleName    String   @unique @map("role_name") @db.VarChar(50)
+  permissions Json     @map("permissions")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  userId       Int        @id @default(autoincrement()) @map("user_id")
+  roleId       Int        @map("role_id")
+  fullName     String     @map("full_name") @db.VarChar(100)
+  email        String     @unique @map("email") @db.VarChar(100)
+  phone        String?    @map("phone") @db.VarChar(20)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  status       UserStatus @default(ACTIVE) @map("status")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  role            Role      @relation(fields: [roleId], references: [roleId], onDelete: Restrict)
+  bookingsCreated Booking[] @relation("BookingCreatedBy")
+  settingsUpdated Setting[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model Customer {
+  customerId    Int      @id @default(autoincrement()) @map("customer_id")
+  fullName      String   @map("full_name") @db.VarChar(100)
+  email         String?  @unique @map("email") @db.VarChar(100)
+  phone         String   @map("phone") @db.VarChar(20)
+  address       String?  @map("address") @db.VarChar(255)
+  cnicPassport  String?  @map("cnic_passport") @db.VarChar(30)
+  loyaltyPoints Int      @default(0) @map("loyalty_points")
+  passwordHash  String?  @map("password_hash") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bookings Booking[]
+  orders   Order[]
+  reviews  Review[]
+
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Rooms (SRS §4.2)
+// ---------------------------------------------------------------------------
+
+model RoomType {
+  roomTypeId    Int      @id @default(autoincrement()) @map("room_type_id")
+  typeName      String   @map("type_name") @db.VarChar(50)
+  capacity      Int      @map("capacity")
+  amenities     String?  @map("amenities")
+  // Photograph shown on the public room cards. Nullable: a room type is
+  // sellable before anyone has photographed it, and the UI falls back to a
+  // placeholder. Mirrors `foods.image_url`.
+  imageUrl      String?  @map("image_url") @db.VarChar(500)
+  rate2hr       Decimal? @map("rate_2hr") @db.Decimal(10, 2)
+  rate4hr       Decimal? @map("rate_4hr") @db.Decimal(10, 2)
+  rate6hr       Decimal? @map("rate_6hr") @db.Decimal(10, 2)
+  rate8hr       Decimal? @map("rate_8hr") @db.Decimal(10, 2)
+  rateFullDay   Decimal? @map("rate_full_day") @db.Decimal(10, 2)
+  rateFullNight Decimal? @map("rate_full_night") @db.Decimal(10, 2)
+  rateDayNight  Decimal? @map("rate_day_night") @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rooms Room[]
+
+  @@map("room_types")
+}
+
+model Room {
+  roomId     Int        @id @default(autoincrement()) @map("room_id")
+  roomTypeId Int        @map("room_type_id")
+  roomNumber String     @unique @map("room_number") @db.VarChar(10)
+  floor      String?    @map("floor") @db.VarChar(10)
+  status     RoomStatus @default(AVAILABLE) @map("status")
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  roomType RoomType  @relation(fields: [roomTypeId], references: [roomTypeId], onDelete: Restrict)
+  bookings Booking[]
+
+  @@index([roomTypeId])
+  @@map("rooms")
+}
+
+model BookingDuration {
+  durationId   Int      @id @default(autoincrement()) @map("duration_id")
+  durationName String   @unique @map("duration_name") @db.VarChar(30)
+  hours        Decimal? @map("hours") @db.Decimal(4, 1)
+
+  bookings Booking[]
+
+  @@map("booking_durations")
+}
+
+// ---------------------------------------------------------------------------
+// Bookings (SRS §4.3, §5.1)
+// ---------------------------------------------------------------------------
+
+model Booking {
+  bookingId        Int           @id @default(autoincrement()) @map("booking_id")
+  customerId       Int           @map("customer_id")
+  roomId           Int           @map("room_id")
+  durationId       Int           @map("duration_id")
+  couponId         Int?          @map("coupon_id")
+  createdBy        Int?          @map("created_by")
+  checkInDatetime  DateTime      @map("check_in_datetime") @db.Timestamptz(6)
+  checkOutDatetime DateTime      @map("check_out_datetime") @db.Timestamptz(6)
+  actualCheckIn    DateTime?     @map("actual_check_in") @db.Timestamptz(6)
+  actualCheckOut   DateTime?     @map("actual_check_out") @db.Timestamptz(6)
+  status           BookingStatus @default(PENDING) @map("status")
+
+  // Pricing locked at confirmation time (CLAUDE.md §4 / SRS §5.3)
+  subtotal       Decimal @default(0) @map("subtotal") @db.Decimal(10, 2)
+  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  taxAmount      Decimal @default(0) @map("tax_amount") @db.Decimal(10, 2)
+  totalAmount    Decimal @default(0) @map("total_amount") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer      Customer        @relation(fields: [customerId], references: [customerId], onDelete: Restrict)
+  room          Room            @relation(fields: [roomId], references: [roomId], onDelete: Restrict)
+  duration      BookingDuration @relation(fields: [durationId], references: [durationId], onDelete: Restrict)
+  coupon        Coupon?         @relation(fields: [couponId], references: [couponId], onDelete: Restrict)
+  createdByUser User?           @relation("BookingCreatedBy", fields: [createdBy], references: [userId], onDelete: Restrict)
+
+  bookingDetail BookingDetail?
+  orders        Order[]
+  payments      Payment[]
+  reviews       Review[]
+
+  // Availability / overlap lookups (SRS §5.1 no double-booking)
+  @@index([roomId, checkInDatetime])
+  @@index([status])
+  @@index([customerId])
+  @@map("bookings")
+}
+
+model BookingDetail {
+  bookingDetailId Int      @id @default(autoincrement()) @map("booking_detail_id")
+  bookingId       Int      @unique @map("booking_id")
+  guestName       String?  @map("guest_name") @db.VarChar(100)
+  guestCount      Int      @map("guest_count")
+  idProofNo       String?  @map("id_proof_no") @db.VarChar(30)
+  specialRequests String?  @map("special_requests")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Detail table -> cascade with its parent booking
+  booking Booking @relation(fields: [bookingId], references: [bookingId], onDelete: Cascade)
+
+  @@map("booking_details")
+}
+
+// ---------------------------------------------------------------------------
+// Restaurant (SRS §4.4)
+// ---------------------------------------------------------------------------
+
+model DiningTable {
+  tableId     Int           @id @default(autoincrement()) @map("table_id")
+  tableNumber String        @unique @map("table_number") @db.VarChar(10)
+  capacity    Int           @map("capacity")
+  location    TableLocation @map("location")
+  status      TableStatus   @default(FREE) @map("status")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  orders Order[]
+
+  @@map("dining_tables")
+}
+
+model Category {
+  categoryId   Int      @id @default(autoincrement()) @map("category_id")
+  categoryName String   @unique @map("category_name") @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  foods Food[]
+
+  @@map("categories")
+}
+
+model Food {
+  foodId             Int              @id @default(autoincrement()) @map("food_id")
+  categoryId         Int              @map("category_id")
+  name               String           @map("name") @db.VarChar(100)
+  description        String?          @map("description")
+  price              Decimal          @map("price") @db.Decimal(10, 2)
+  imageUrl           String?          @map("image_url") @db.VarChar(255)
+  availabilityStatus FoodAvailability @default(AVAILABLE) @map("availability_status")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category   Category    @relation(fields: [categoryId], references: [categoryId], onDelete: Restrict)
+  orderItems OrderItem[]
+
+  @@index([categoryId])
+  @@map("foods")
+}
+
+// ---------------------------------------------------------------------------
+// Orders (SRS §4.5, §5.2)
+// ---------------------------------------------------------------------------
+
+model Order {
+  orderId         Int         @id @default(autoincrement()) @map("order_id")
+  customerId      Int?        @map("customer_id")
+  bookingId       Int?        @map("booking_id")
+  tableId         Int?        @map("table_id")
+  couponId        Int?        @map("coupon_id")
+  orderType       OrderType   @map("order_type")
+  deliveryAddress String?     @map("delivery_address") @db.VarChar(255)
+  status          OrderStatus @default(PLACED) @map("status")
+
+  // Pricing locked at confirmation time (CLAUDE.md §4 / SRS §5.3)
+  subtotal       Decimal @default(0) @map("subtotal") @db.Decimal(10, 2)
+  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  taxAmount      Decimal @default(0) @map("tax_amount") @db.Decimal(10, 2)
+  totalAmount    Decimal @default(0) @map("total_amount") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer?    @relation(fields: [customerId], references: [customerId], onDelete: Restrict)
+  booking  Booking?     @relation(fields: [bookingId], references: [bookingId], onDelete: Restrict)
+  table    DiningTable? @relation(fields: [tableId], references: [tableId], onDelete: Restrict)
+  coupon   Coupon?      @relation(fields: [couponId], references: [couponId], onDelete: Restrict)
+
+  orderItems OrderItem[]
+  payments   Payment[]
+  reviews    Review[]
+
+  // Kitchen queue filters by status (SRS §4.5)
+  @@index([status])
+  @@index([bookingId])
+  @@index([customerId])
+  @@map("orders")
+}
+
+model OrderItem {
+  orderItemId         Int      @id @default(autoincrement()) @map("order_item_id")
+  orderId             Int      @map("order_id")
+  foodId              Int      @map("food_id")
+  quantity            Int      @map("quantity")
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(10, 2)
+  subtotal            Decimal  @map("subtotal") @db.Decimal(10, 2)
+  specialInstructions String?  @map("special_instructions") @db.VarChar(255)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Line item -> cascade with its parent order; the menu item itself is protected
+  order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  food  Food  @relation(fields: [foodId], references: [foodId], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([foodId])
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Money, promotions, feedback (SRS §4.6–§4.9)
+// ---------------------------------------------------------------------------
+
+model Payment {
+  paymentId      Int           @id @default(autoincrement()) @map("payment_id")
+  bookingId      Int?          @map("booking_id")
+  orderId        Int?          @map("order_id")
+  amount         Decimal       @map("amount") @db.Decimal(10, 2)
+  method         PaymentMethod @map("method")
+  paymentType    PaymentType   @map("payment_type")
+  status         PaymentStatus @default(PENDING) @map("status")
+  transactionRef String?       @map("transaction_ref") @db.VarChar(100)
+  paidAt         DateTime      @map("paid_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking Booking? @relation(fields: [bookingId], references: [bookingId], onDelete: Restrict)
+  order   Order?   @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+
+  @@index([bookingId, orderId])
+  @@map("payments")
+}
+
+model Coupon {
+  couponId      Int                 @id @default(autoincrement()) @map("coupon_id")
+  code          String              @unique @map("code") @db.VarChar(30)
+  discountType  DiscountType        @map("discount_type")
+  discountValue Decimal             @map("discount_value") @db.Decimal(10, 2)
+  applicableTo  CouponApplicability @map("applicable_to")
+  minAmount     Decimal?            @map("min_amount") @db.Decimal(10, 2)
+  usageLimit    Int?                @map("usage_limit")
+  validFrom     DateTime            @map("valid_from") @db.Date
+  validTo       DateTime            @map("valid_to") @db.Date
+  // Switched off without deleting, so historical bookings/orders keep their link.
+  isActive      Boolean             @default(true) @map("is_active")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bookings Booking[]
+  orders   Order[]
+
+  @@map("coupons")
+}
+
+/// A review targets a booking **or** an order (SRS §7.2), never both.
+///
+/// One review per target (SRS §4.9): the unique constraints are what enforce
+/// it — a service-level check alone would let two concurrent submissions
+/// through. Postgres allows any number of NULLs in a unique index, so the
+/// column that does not apply stays free.
+model Review {
+  reviewId   Int      @id @default(autoincrement()) @map("review_id")
+  customerId Int      @map("customer_id")
+  bookingId  Int?     @unique @map("booking_id")
+  orderId    Int?     @unique @map("order_id")
+  rating     Int      @map("rating") @db.SmallInt
+  comment    String?  @map("comment")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [customerId], onDelete: Restrict)
+  booking  Booking? @relation(fields: [bookingId], references: [bookingId], onDelete: Restrict)
+  order    Order?   @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+
+  @@index([customerId])
+  @@map("reviews")
+}
+
+model Notification {
+  notificationId Int                 @id @default(autoincrement()) @map("notification_id")
+  recipientType  RecipientType       @map("recipient_type")
+  recipientId    Int                 @map("recipient_id")
+  title          String              @map("title") @db.VarChar(100)
+  message        String              @map("message")
+  channel        NotificationChannel @map("channel")
+  status         NotificationStatus  @default(PENDING) @map("status")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Polymorphic recipient (customers.customer_id | users.user_id) — no FK by design (SRS §7.2)
+  @@index([recipientType, recipientId])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// System settings (SRS §9 — Tax Settings screen)
+// ---------------------------------------------------------------------------
+
+/// Single-row configuration table. SRS §9 calls for tax rates the client can
+/// change without a deploy; §7.2 defines no table for them, so this one is
+/// additive. `settingId` is pinned to 1 by SINGLE_ROW_ID in settingsService —
+/// reads upsert the row, so there is never more than one.
+model Setting {
+  settingId   Int      @id @default(autoincrement()) @map("setting_id")
+  roomTaxRate Decimal  @default(0) @map("room_tax_rate") @db.Decimal(5, 2)
+  foodTaxRate Decimal  @default(0) @map("food_tax_rate") @db.Decimal(5, 2)
+  updatedBy   Int?     @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [userId], onDelete: SetNull)
+
+  @@map("settings")
+}

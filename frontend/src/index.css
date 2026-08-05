@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-neutral-50 font-sans text-base text-neutral-800 antialiased;
+  }
+
+  /* Headings are ink, not body grey — the contrast step is what makes a page
+     scan as hierarchy rather than as one wall of text. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-neutral-900;
+  }
+
+  /* The browser default ring is replaced everywhere by one token, so focus
+     looks the same on a button, an input and a link (§9 Accessibility). It is
+     :focus-visible so a mouse click never paints a ring, but keyboard and
+     screen-reader navigation always does. */
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-white;
+  }
+
+  /* Respect a reduced-motion preference: transitions collapse to near-instant
+     rather than disappearing, so state changes are still perceivable. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skeletons are a shimmer over a neutral block rather than a pulse, so a
+     table of ten loading rows reads as one surface instead of ten blinking
+     lights. */
+  .skeleton {
+    @apply relative overflow-hidden bg-neutral-200/70;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent;
+    content: '';
+  }
+
+  /* Horizontal scrollers (menu rails, mobile tab bars) hide their scrollbar
+     but stay scrollable and keyboard-reachable. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

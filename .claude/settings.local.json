@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pg_lsclusters)",
+      "Bash(PGPASSWORD=x psql -h localhost -p 5434 -U rrbs_user -d rrbs_dev -c \"\\\\dt\")"
+    ]
+  }
+}
