@@ -9,5 +9,6 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/logout', requireAuth, authController.logout);
 router.get('/me', requireAuth, authController.me);
+router.patch('/password', requireAuth, authController.changePassword);
 
 module.exports = router;

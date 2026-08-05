@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, LogOut, Menu as MenuIcon, PanelLeftClose, Search, User, X } from 'lucide-react'
+import { Bell, LogOut, Menu as MenuIcon, PanelLeftClose, Search, User, UserCog, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -175,6 +175,7 @@ export default function AdminLayout() {
                 </button>
               )}
               items={[
+                { label: 'My account', to: '/admin/account', icon: UserCog },
                 { label: 'Guest site', to: '/', icon: User },
                 { label: 'Sign out', onSelect: logout, icon: LogOut, danger: true, separatorBefore: true },
               ]}

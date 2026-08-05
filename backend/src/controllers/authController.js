@@ -55,6 +55,26 @@ function validateLogin(body) {
   return { email, password };
 }
 
+function validateChangePassword(body) {
+  const errors = {};
+  const currentPassword = String(body.currentPassword ?? '');
+  const newPassword = String(body.newPassword ?? '');
+
+  if (!currentPassword) errors.currentPassword = 'Your current password is required.';
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    errors.newPassword = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (currentPassword && newPassword && currentPassword === newPassword) {
+    errors.newPassword = 'Choose a password different from your current one.';
+  }
+
+  if (Object.keys(errors).length > 0) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'Please correct the highlighted fields.', errors);
+  }
+
+  return { currentPassword, newPassword };
+}
+
 /** POST /api/auth/register — public self-registration, Customer role only. */
 const register = asyncHandler(async (req, res) => {
   const payload = validateRegister(req.body ?? {});
@@ -87,4 +107,20 @@ const me = asyncHandler(async (req, res) => {
   return ok(res, { user });
 });
 
-module.exports = { register, login, logout, me };
+/**
+ * PATCH /api/auth/password — changes the caller's own password.
+ *
+ * Which account is changed comes from the verified token, never the body. The
+ * whole /api/auth prefix is rate limited in server.js, so this is throttled
+ * alongside login rather than offering an unmetered way to test passwords.
+ *
+ * Like logout, this cannot revoke tokens already issued: they remain valid
+ * until they expire.
+ */
+const changePassword = asyncHandler(async (req, res) => {
+  const payload = validateChangePassword(req.body ?? {});
+  const result = await authService.changePassword(req.auth, payload);
+  return ok(res, result);
+});
+
+module.exports = { register, login, logout, me, changePassword };

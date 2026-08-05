@@ -11,6 +11,7 @@ import {
   Settings2,
   Sofa,
   Tags,
+  UserCog,
   UsersRound,
   Utensils,
 } from 'lucide-react'
@@ -91,6 +92,8 @@ export const NAV_SECTIONS = [
     title: 'Settings',
     items: [
       { to: '/admin/settings/tax', label: 'Tax rates', icon: Settings2, roles: ['Super Admin'] },
+      // No `roles`: everyone in the back office has an account of their own.
+      { to: '/admin/account', label: 'My account', icon: UserCog },
     ],
   },
 ]

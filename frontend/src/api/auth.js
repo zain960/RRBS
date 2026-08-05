@@ -19,3 +19,12 @@ export async function me() {
   const { data } = await client.get('/auth/me')
   return data.data.user
 }
+
+/**
+ * Changes the signed-in user's own password. The account is taken from the
+ * bearer token server-side, so there is nothing to identify here.
+ */
+export async function changePassword(currentPassword, newPassword) {
+  const { data } = await client.patch('/auth/password', { currentPassword, newPassword })
+  return data.data
+}

@@ -27,6 +27,7 @@ import Customers from './pages/admin/Customers'
 import AdminDashboard from './pages/admin/Dashboard'
 import Kitchen from './pages/admin/Kitchen'
 import Menu from './pages/admin/Menu'
+import MyAccount from './pages/admin/MyAccount'
 import Orders from './pages/admin/Orders'
 import Payments from './pages/admin/Payments'
 import Reports from './pages/admin/Reports'
@@ -294,6 +295,11 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* No role guard beyond the /admin gate: changing your own
+                  password is not privileged, and the API scopes it to the
+                  bearer token rather than to anything this screen sends. */}
+              <Route path="account" element={<MyAccount />} />
             </Route>
 
             {/* An unknown URL now explains itself rather than silently

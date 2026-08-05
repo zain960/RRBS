@@ -168,4 +168,69 @@ async function getCurrentUser(auth) {
   return publicCustomer(customer, role);
 }
 
-module.exports = { register, login, getCurrentUser };
+/**
+ * Changes the signed-in principal's own password (SRS §8 Security).
+ *
+ * Deliberately scoped to the caller: the account is read from verified token
+ * claims, never from the request body, so this endpoint cannot be pointed at
+ * somebody else's account. Resetting *another* user's password belongs to staff
+ * management, which this phase does not implement.
+ *
+ * The issued token stays valid until it expires — JWTs are stateless, the same
+ * caveat `logout` carries. A password change therefore does not sign out other
+ * sessions; that needs a denylist.
+ */
+async function changePassword(auth, { currentPassword, newPassword }) {
+  /**
+   * A wrong current password is a 422, not a 401. The caller is already
+   * authenticated, and the frontend signs the user out on any 401 — so
+   * answering 401 here would end the session over a typo in a form field.
+   */
+  const wrongCurrentPassword = () =>
+    new AppError(422, 'VALIDATION_ERROR', 'Please correct the highlighted fields.', {
+      currentPassword: 'Current password is incorrect.',
+    });
+
+  if (auth.accountType === 'staff') {
+    const staff = await prisma.user.findUnique({ where: { userId: auth.userId } });
+    if (!staff) throw new AppError(401, 'UNAUTHENTICATED', 'Account no longer exists.');
+    if (staff.status !== 'ACTIVE') {
+      throw new AppError(403, 'ACCOUNT_INACTIVE', 'This account has been deactivated.');
+    }
+
+    const matches = await bcrypt.compare(currentPassword, staff.passwordHash);
+    if (!matches) throw wrongCurrentPassword();
+
+    await prisma.user.update({
+      where: { userId: staff.userId },
+      data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
+    });
+
+    return { changed: true };
+  }
+
+  const customer = await prisma.customer.findUnique({ where: { customerId: auth.userId } });
+  if (!customer) throw new AppError(401, 'UNAUTHENTICATED', 'Account no longer exists.');
+
+  // Guest-checkout records exist without a password (customers.password_hash is
+  // nullable — CLAUDE.md §5), so there is nothing to verify or replace.
+  if (!customer.passwordHash) {
+    throw new AppError(
+      409,
+      'NO_PASSWORD_SET',
+      'This guest record has no password to change. Register an account to set one.'
+    );
+  }
+
+  const matches = await bcrypt.compare(currentPassword, customer.passwordHash);
+  if (!matches) throw wrongCurrentPassword();
+
+  await prisma.customer.update({
+    where: { customerId: customer.customerId },
+    data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
+  });
+
+  return { changed: true };
+}
+
+module.exports = { register, login, getCurrentUser, changePassword };
