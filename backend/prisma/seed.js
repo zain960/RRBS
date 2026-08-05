@@ -222,11 +222,18 @@ const TABLES = [
   { tableNumber: 'T8', capacity: 8, location: 'OUTDOOR' },
 ];
 
+// The first back-office account. Overridable from the environment so a
+// deployment never has to ship with a password that is published in this repo —
+// the development defaults are only reached when the variables are unset.
+//
+// Note the password applies on creation only: the upsert below updates the
+// profile but never the hash, so re-seeding cannot reset a password the client
+// has since changed.
 const SUPER_ADMIN = {
-  fullName: 'System Administrator',
-  email: 'admin@rrbs.local',
-  phone: '+920000000000',
-  password: 'Admin@123',
+  fullName: process.env.SUPER_ADMIN_NAME || 'System Administrator',
+  email: process.env.SUPER_ADMIN_EMAIL || 'admin@rrbs.local',
+  phone: process.env.SUPER_ADMIN_PHONE || '+920000000000',
+  password: process.env.SUPER_ADMIN_PASSWORD || 'Admin@123',
 };
 
 // Tax rates the client has yet to confirm (SRS §10). Seeded once, then owned by
@@ -360,6 +367,17 @@ async function main() {
 
   // --- Super Admin ---------------------------------------------------------
   const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { roleName: 'Super Admin' } });
+
+  // The development default is documented in the README, so on a public
+  // deployment it is a known credential. Only reachable if the deploy skipped
+  // SUPER_ADMIN_PASSWORD (render.yaml marks it `sync: false` to prevent that).
+  if (process.env.NODE_ENV === 'production' && !process.env.SUPER_ADMIN_PASSWORD) {
+    console.warn(
+      '  WARNING: SUPER_ADMIN_PASSWORD is unset — seeding the default password ' +
+        'published in the README. Set it, or change the password from the app immediately.'
+    );
+  }
+
   const passwordHash = await bcrypt.hash(SUPER_ADMIN.password, BCRYPT_ROUNDS);
 
   await prisma.user.upsert({

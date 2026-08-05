@@ -5,6 +5,10 @@ node_modules/
 dist/
 build/
 
+# Frontend bundle published into the backend by scripts/copy-frontend.js —
+# generated at build time, on Render and locally alike.
+backend/public/
+
 # Logs
 *.log
 npm-debug.log*

@@ -1,0 +1,105 @@
+# Render Blueprint — Restaurant & Room Booking System
+#
+# Deploys the single-service topology ("option A" in docs/DEPLOY.md): one Node
+# web service that serves the API and the built React bundle from the same
+# origin, plus a managed PostgreSQL instance.
+#
+# Because API and frontend share an origin there is no cross-origin request to
+# authorise, so CORS_ORIGIN stays unset — see backend/.env.production.example.
+#
+# Usage: Render Dashboard -> New -> Blueprint -> pick this repo. Render reads
+# this file, prompts for the values marked `sync: false`, and creates both
+# resources. Full walkthrough in docs/DEPLOY.md.
+
+databases:
+  - name: rrbs-db
+    databaseName: rrbs
+    user: rrbs_user
+    plan: free
+    # Must match the web service's region — a free database is not reachable
+    # from another one.
+    region: singapore
+
+services:
+  - type: web
+    name: rrbs
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: ./scripts/render-build.sh
+    startCommand: npm start --prefix backend
+    # Liveness only: it touches no data, so a boot loop stays distinguishable
+    # from a database outage (/api/health/db covers the latter).
+    healthCheckPath: /api/health
+
+    envVars:
+      # --- Runtime ---------------------------------------------------------
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+
+      # --- Database --------------------------------------------------------
+      # Wired from the instance above; Render injects the internal connection
+      # string, which needs no sslmode parameter.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rrbs-db
+          property: connectionString
+
+      # --- Auth ------------------------------------------------------------
+      # Generated once by Render and never shown in this file. Rotating it in
+      # the dashboard invalidates every issued token, signing all users out.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+
+      # --- Deployment topology ---------------------------------------------
+      # Render's load balancer adds exactly one proxy hop. Rate limiting keys on
+      # the client IP, so this count is what stops a caller spoofing
+      # X-Forwarded-For to slip past the throttle.
+      - key: TRUST_PROXY
+        value: "1"
+
+      # --- Rate limiting (SRS §8) ------------------------------------------
+      - key: AUTH_RATE_LIMIT_WINDOW_MINUTES
+        value: "15"
+      - key: AUTH_RATE_LIMIT_MAX
+        value: "20"
+
+      # --- First-run admin -------------------------------------------------
+      # `sync: false` means Render prompts for these at blueprint creation
+      # rather than reading them from the repo — the seed must never ship a
+      # known password to a public URL. Set once; the seed upserts the account
+      # but deliberately does not reset the password on later deploys, so
+      # changing these afterwards has no effect (change it in the app instead).
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+
+      # --- Business settings (SRS §10 — confirm with the client) -----------
+      # Tax percentages seed the `settings` table on first run only; after that
+      # the Tax Settings screen owns them and these are ignored.
+      - key: ROOM_TAX_PERCENT
+        value: "0"
+      - key: FOOD_TAX_PERCENT
+        value: "0"
+      - key: BOOKING_MIN_ADVANCE_PERCENT
+        value: "0"
+      - key: BOOKING_NO_SHOW_GRACE_MINUTES
+        value: "120"
+      - key: FOOD_DELIVERY_MIN_AMOUNT
+        value: "0"
+      - key: DEFAULT_PAGE_SIZE
+        value: "20"
+      - key: MAX_PAGE_SIZE
+        value: "100"
+
+      # --- Notifications (SRS §4.8) ----------------------------------------
+      # `log` only, so no mail server is required to deploy. To turn on email,
+      # add the SMTP_* variables in the dashboard and set this to `log,email` —
+      # a blank SMTP_HOST keeps the email transport switched off either way.
+      - key: NOTIFICATION_CHANNELS
+        value: log
