@@ -134,12 +134,16 @@ platforms have a permanent free tier that needs no card.
 client, builds the frontend, and rewrites every non-`/api` path to `index.html`
 so deep links survive a refresh.
 
-`api/[[...slug]].js` is an **optional catch-all** rather than an `index.js` plus
-a rewrite, because a rewrite would replace the request path and the router is
-mounted at `/api`. As a catch-all, `req.url` still reads `/api/health` when it
-reaches Express, so no route has to move. Express apps are already
-`(req, res)` handlers, and `server.js` calls `listen()` only as a main module,
-so exporting it is the whole adapter.
+`api/[...slug].js` is a **catch-all** rather than an `index.js` plus a rewrite,
+because a rewrite would replace the request path and the router is mounted at
+`/api`. As a catch-all, `req.url` still reads `/api/health` when it reaches
+Express, so no route has to move. Express apps are already `(req, res)`
+handlers, and `server.js` calls `listen()` only as a main module, so exporting
+it is the whole adapter.
+
+Use `[...slug]`, not the optional `[[...slug]]`. With the optional form Vercel
+matched a single segment only: `/api/health` resolved, while `/api/health/db`
+and `/api/auth/login` returned Vercel's own 404 without reaching Express.
 
 ### Steps
 
