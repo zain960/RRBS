@@ -1,8 +1,10 @@
 # Deployment
 
-Two supported topologies. **Option A** is what `render.yaml` in the repo root
-automates and what the rest of this document walks through; option B is
-documented because the code already supports it.
+Three supported topologies. **Option A** is what `render.yaml` in the repo root
+automates and what most of this document walks through; option B is documented
+because the code already supports it; **option C** exists because Render now
+requires credit-card verification before it will create even free resources, and
+Vercel + Neon is the equivalent that does not.
 
 | | Option A — single service | Option B — split |
 |---|---|---|
@@ -113,6 +115,61 @@ so changing it means rebuilding, not restarting.
 The host must rewrite unknown paths to `index.html`, or deep links 404 on
 refresh — Vercel does this for SPA frameworks automatically; Netlify needs a
 `_redirects` entry (`/* /index.html 200`).
+
+---
+
+## Option C — Vercel + Neon (no credit card)
+
+Same single-origin idea as option A, but the API runs as a serverless function
+instead of a long-lived process, and the database is hosted separately. Both
+platforms have a permanent free tier that needs no card.
+
+| Piece | Where | Config |
+|---|---|---|
+| Frontend | Vercel static output | `frontend/dist`, built by `vercel.json`'s build command |
+| API | Vercel function | `api/[[...slug]].js` — exports the Express app unchanged |
+| Database | Neon | Connection string goes in `DATABASE_URL` |
+
+`vercel.json` drives it: it installs both workspaces, generates the Prisma
+client, builds the frontend, and rewrites every non-`/api` path to `index.html`
+so deep links survive a refresh.
+
+`api/[[...slug]].js` is an **optional catch-all** rather than an `index.js` plus
+a rewrite, because a rewrite would replace the request path and the router is
+mounted at `/api`. As a catch-all, `req.url` still reads `/api/health` when it
+reaches Express, so no route has to move. Express apps are already
+`(req, res)` handlers, and `server.js` calls `listen()` only as a main module,
+so exporting it is the whole adapter.
+
+### Steps
+
+1. **Neon** → new project. Pick the region closest to the Vercel one (default
+   `iad1` / AWS `us-east-1`) — every query pays that round trip.
+2. Apply the schema from a machine with the repo checked out, since Vercel's
+   build has no reason to touch the database:
+   ```sh
+   export DATABASE_URL="<neon pooled connection string>"
+   export SUPER_ADMIN_EMAIL="you@example.com" SUPER_ADMIN_PASSWORD="<chosen>"
+   npm run db:deploy --prefix backend && npm run db:seed --prefix backend
+   ```
+3. **Vercel** → Add New → Project → import the repo. It reads `vercel.json`;
+   leave the framework preset as **Other**.
+4. Set environment variables: `DATABASE_URL`, `JWT_SECRET`
+   (`openssl rand -base64 32`), `NODE_ENV=production`, `TRUST_PROXY=1`. The
+   `SUPER_ADMIN_*` pair is not needed here — the seed already ran in step 2.
+5. Deploy, then check `/api/health`, `/api/health/db` and a deep link.
+
+### Where this option is weaker than A
+
+- **Vercel's Hobby plan is for non-commercial use.** Running a real property's
+  bookings on it is outside their terms; that use needs Pro, or option A.
+- **4 CPU-hours of active compute per month**, and 1M invocations. Fine for a
+  demo, not a busy back office.
+- **Cold starts on both tiers.** The function spins up per request after idle,
+  and Neon's compute scales to zero after 5 minutes.
+- **Neon free is 0.5 GB** and suspends compute if the monthly limit is hit.
+- The API is serverless, so anything assuming a persistent process — in-memory
+  caches, background timers — would not survive here. The app has none today.
 
 ---
 
