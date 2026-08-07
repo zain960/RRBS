@@ -233,12 +233,23 @@ export default function Book() {
   async function handlePayAndConfirm() {
     setBusy(true)
     try {
-      await addPayment(booking.id, {
+      // A payment that covers the full total confirms the booking inside the
+      // same transaction that records it (SRS §4.6), so the response already
+      // carries the confirmed booking. Asking for a second confirm would be a
+      // Confirmed -> Confirmed move, which the lifecycle guard rejects (409).
+      // The fallback still matters: if the room was taken in the meantime the
+      // auto-confirm reports rather than throws, and re-confirming surfaces the
+      // real reason instead of a success screen for an unconfirmed stay.
+      const { autoConfirm } = await addPayment(booking.id, {
         amount: booking.pricing.totalAmount,
         method: paymentMethod,
         payment_type: 'FULL',
       })
-      const confirmed = await confirmBooking(booking.id)
+
+      const confirmed = autoConfirm?.confirmed
+        ? autoConfirm.booking
+        : await confirmBooking(booking.id)
+
       setBooking(confirmed)
       setStep('done')
       toast.success('Payment recorded and booking confirmed.')
